@@ -111,7 +111,8 @@ class FulfillmentController extends Controller
             //Фундамент Винта
 
             $sheet->setCellValue('D44', $design->vfCount);
-            $sheet->setCellValue('D86', $design->outer_P); // Updated
+            $sheet->setCellValue('D45', $design->vfBalk);
+            $sheet->setCellValue('D86', $design->outer_p); // Updated
             $sheet->setCellValue('D89', $design->lfAngleG); // Updated
 
             //Брус
@@ -150,18 +151,18 @@ class FulfillmentController extends Controller
             $sheet->setCellValue('D291', $design->srPlanVetr);
             $sheet->setCellValue('D292', $design->srPlanK);
             $sheet->setCellValue('D293', $design->srKapelnik);
-            $sheet->setCellValue('D294', $design->srEndn);
+            $sheet->setCellValue('D294', $design->mrEndv);
             $sheet->setCellValue('D295', $design->srGvozd);
-            $sheet->setCellValue('D296', $design->srSam70);
-            $sheet->setCellValue('D297', $design->srPack);
-            $sheet->setCellValue('D298', $design->srIzospanAM);
-            $sheet->setCellValue('D299', $design->srIzospanAM35);
-            $sheet->setCellValue('D300', $design->srLenta);
-            $sheet->setCellValue('D301', $design->srRokvul);
-            $sheet->setCellValue('D302', $design->srIzospanB);
-            $sheet->setCellValue('D303', $design->srIzospanB35);
-            $sheet->setCellValue('D304', $design->srPrimUgol);
-            $sheet->setCellValue('D305', $design->srPrimNakl);
+            $sheet->setCellValue('D296', $design->mrSam70);
+            $sheet->setCellValue('D297', $design->mrPack);
+            $sheet->setCellValue('D298', $design->mrIzospanAM);
+            $sheet->setCellValue('D299', $design->mrIzospanAM35);
+            $sheet->setCellValue('D300', $design->mrLenta);
+            $sheet->setCellValue('D301', $design->mrRokvul);
+            $sheet->setCellValue('D302', $design->mrIzospanB);
+            $sheet->setCellValue('D303', $design->mrIzospanB35);
+            $sheet->setCellValue('D304', $design->mrPrimUgol);
+            $sheet->setCellValue('D305', $design->mrPrimNakl);
             $sheet->setCellValue('D306', $design->srOSB);
             $sheet->setCellValue('D308', $design->srAero);
             $sheet->setCellValue('D309', $design->srAeroSkat);
@@ -219,7 +220,7 @@ class FulfillmentController extends Controller
             $sheet->setCellValue('L307', $design->srKonOneSkat);
             $sheet->setCellValue('L311', $design->srEndn);
             $sheet->setCellValue('L312', $design->srEndv);
-            $sheet->setCellValue('L313', $design->srGvozd);
+            $sheet->setCellValue('L313', $design->mrSam35);
             $sheet->setCellValue('L314', $design->srSam70);
             $sheet->setCellValue('L315', $design->srPack);
             $sheet->setCellValue('L316', $design->srIzospanAM);
@@ -234,14 +235,14 @@ class FulfillmentController extends Controller
             $endingIndex = 40;
             // Mapping of floor names to numbers/letters
             $floorMapping = [
-                "\u041f\u0435\u0440\u0432\u044b\u0439" => '1', // Первый
-                "\u0412\u0442\u043e\u0440\u043e\u0439" => '2', // Второй
-                "\u0422\u0440\u0435\u0442\u0438\u0439" => '3', // Третий
-                "\u0427\u0435\u0440\u0434\u0430\u043a" => 'Ч'  // Чердак
+                "Первый" => '1', // Первый
+                "Второй" => '2', // Второй
+                "Третий" => '3', // Третий
+                "Чердак" => 'Ч'  // Чердак
             ];
 
             foreach ($design->floorsList as $room) {
-                $floorNumber = $floorMapping[$room['floors']] ?? ''; // Default to empty if not found
+                $floorNumber = $floorMapping[$room['floors']] ?? ''; 
                 $sheet->setCellValue('E' . $startingIndex, $room['length']);
                 $sheet->setCellValue('F' . $startingIndex, $room['width']);
                 $sheet->setCellValue('G' . $startingIndex, 630);
