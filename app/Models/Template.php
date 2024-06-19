@@ -14,8 +14,5 @@ class Template extends Model
      *
      * @var array
      */
-    protected $fillable = [
-        'name',
-        'file_path',
-    ];
+    protected $fillable = ['name', 'file_path', 'category'];
 }

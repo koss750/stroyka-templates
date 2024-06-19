@@ -8,10 +8,20 @@ use Illuminate\Http\Request;
 use App\Models\Design;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use App\Jobs\ReindexProjectsJob;
+use App\Models\InvoiceType;
 
 
-class Fulfillment extends Controller
+class FulfillmentController extends Controller
 {
+    public function processLatestProjects($projectCount)
+    {
+        //execution time limit to 10min
+        ini_set('max_execution_time', 600);
+        ReindexProjectsJob::dispatch($projectCount);
+        return response()->json(['message' => 'Reindexing job dispatched'], 200);
+    }
+
     public function process(Request $request)
     {
         
@@ -19,7 +29,7 @@ class Fulfillment extends Controller
         if ($request->has('debug') && $request->debug > 0) {
             $debug = $request->debug;
         } else {
-            
+            $debug = 1;
         }
         // Check if debugging is enabled
         
@@ -52,8 +62,9 @@ class Fulfillment extends Controller
                 throw new \Exception("Invalid input parameters.");
             }
 
-            $filePath = storage_path('templates/' . $filename);
+            $filePath = storage_path('app/templates/' . $filename);
             if (!file_exists($filePath)) {
+                Log::info("File does not exist: $filePath");
                 throw new \Exception("File does not exist.");
             }
 
@@ -63,7 +74,9 @@ class Fulfillment extends Controller
 
             // Load the Excel file
             $spreadsheet = IOFactory::load($filePath);
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
             $sheet = $spreadsheet->getSheetByName('data');
+            Log::info("Value of D283 in 'data' sheet: " . $spreadsheet->getSheetByName('data')->getCell('D283')->getCalculatedValue());
             if (!$sheet) {
                 throw new \Exception("Sheet '{$sheetname}' not found.");
             }
@@ -161,50 +174,47 @@ class Fulfillment extends Controller
             }
             $sheet->setCellValue('P15', "=UNIQUE(E15:E40)");
 
+            //save changes done so far
+
             Log::info("Balki completed");
 
-
-            Log::info("Attempting to locate sheet for $sheetname");
-            
-            if ($sheetname != "data") {
-                if ($sheetname == "balki") {
-                    $sheetname = "балки";
-                } else {
-                $invoiceTypeObject = InvoiceType::where('label', $sheetname)->firstOrFail();
-                $sheetname = $invoiceTypeObject->params;
+            //if sheetname is "all", save and download the new spreadsheet
+            if ($sheetname == "all") {
+                $filename = $designId . "_" . time();
+                $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
+                $writer->save($newFilePath);
+                if ($debug) {
+                    //log value of D283 in 'data' sheet
+                    Log::info("Value of D283 in 'data' sheet: " . $spreadsheet->getSheetByName('data')->getCell('D283')->getCalculatedValue());
                 }
-            } 
-            $sheet = $spreadsheet->getSheetByName($sheetname);
-            if (!$sheet) {
-                throw new \Exception("Sheet '{$sheetname}' not found.");
+                // Return the new file path
+                return response()->download($newFilePath);
             }
-
-            if ($debug) {
-                Log::info("Preparing to copy sheet: " . $sheet->getTitle());
-            }
+            
 
             // Create a new Spreadsheet for the copied data
             $newSpreadsheet = new Spreadsheet();
             $newWorksheet = $newSpreadsheet->getActiveSheet();
-            $newWorksheet->setTitle("smeta");
 
-            // Copy column widths
-            foreach ($sheet->getColumnIterator() as $column) {
-                $columnIndex = $column->getColumnIndex();
-                $newWorksheet->getColumnDimension($columnIndex)
+            //loop through all sheets in the spreadsheet
+            foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+                // Copy column widths for columns A:N
+                foreach ($sheet->getColumnIterator('A', 'N') as $column) {
+                    $columnIndex = $column->getColumnIndex();
+                    $newWorksheet->getColumnDimension($columnIndex)
                     ->setWidth($sheet->getColumnDimension($columnIndex)->getWidth());
                 if ($debug) {
                     Log::info("Copied column width for column $columnIndex");
+                    }
                 }
-            }
 
-            // Copy merged cells
-            foreach ($sheet->getMergeCells() as $mergeRange) {
-                $newWorksheet->mergeCells($mergeRange);
-                if ($debug) {
-                    Log::info("Copied merged cell range $mergeRange");
+                // Copy merged cells
+                foreach ($sheet->getMergeCells() as $mergeRange) {
+                    $newWorksheet->mergeCells($mergeRange);
+                    if ($debug) {
+                        Log::info("Copied merged cell range $mergeRange");
+                    }
                 }
-            }
 
             // Copy values and formatting (but no formulas) from the original sheet
             foreach ($sheet->getRowIterator() as $row) {
@@ -219,24 +229,22 @@ class Fulfillment extends Controller
                         if ($debug==2) {
                             //Log::info("Copied cell {$columnIndex}{$rowIndex}");
                         }
-                    } catch (\Exception $e) {
-                        Log::error("Error copying cell {$columnIndex}{$rowIndex}: " . $e->getMessage());
+                        } catch (\Exception $e) {
+                            Log::error("Error copying cell {$columnIndex}{$rowIndex}: " . $e->getMessage());
+                        }
                     }
                 }
             }
 
+            
+
             // Save the new file to a new location
             $filename = $designId . "_" . time();
             $newFilePath = storage_path('templates/orders/' . $filename . '.xlsx');
-            $writer = IOFactory::createWriter($newSpreadsheet, 'Xlsx');
-            $writer->save($newFilePath);
+            $publicpath = public_path('orders/' . $filename . '.xlsx');
+            IOFactory::save($spreadsheet, $newFilePath);
 
-            if ($debug) {
-                Log::info("New file saved to $newFilePath");
-            }
-
-            // Return the new file path
-            return response()->json(['newFilePath' => $newFilePath]);
+            return response()->download($publicpath);
 
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
             Log::error("Spreadsheet read error: " . $e->getMessage());
