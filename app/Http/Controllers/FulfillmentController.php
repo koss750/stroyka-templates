@@ -111,7 +111,8 @@ class FulfillmentController extends Controller
             //Фундамент Винта
 
             $sheet->setCellValue('D44', $design->vfCount);
-            $sheet->setCellValue('D86', $design->vfLength);
+            $sheet->setCellValue('D86', $design->outer_P); // Updated
+            $sheet->setCellValue('D89', $design->lfAngleG); // Updated
 
             //Брус
 
@@ -129,6 +130,12 @@ class FulfillmentController extends Controller
             $sheet->setCellValue('I116', $allFloors["Sfl4"]);
 
             Log::info("Updated Brus section of Data");
+
+            //OCB and stuff
+            $sheet->setCellValue('D169', $design->baseLength); // New
+            $sheet->setCellValue('D170', $design->baseD20);
+
+            Log::info("Updated OCB section of Data");
 
             // Кровля мягкая
 
@@ -161,20 +168,95 @@ class FulfillmentController extends Controller
             $sheet->setCellValue('D310', $design->stropValue);
 
             Log::info("Updated rSoft section of Data");
-            
-            Log::info("Attempting to figure out Balki");
-            Log::info("Getting a list of rooms and their dimensions");
+
+            $sheet->setCellValue('D351', $design->pvPart1);
+            $sheet->setCellValue('D352', $design->pvPart2);
+            $sheet->setCellValue('D353', $design->pvPart3);
+            $sheet->setCellValue('D354', $design->pvPart4);
+            $sheet->setCellValue('D355', $design->pvPart5);
+            $sheet->setCellValue('D356', $design->pvPart6);
+            $sheet->setCellValue('D357', $design->pvPart7);
+            $sheet->setCellValue('D358', $design->pvPart8);
+            $sheet->setCellValue('D359', $design->pvPart9);
+            $sheet->setCellValue('D360', $design->pvPart10);
+            $sheet->setCellValue('D361', $design->pvPart11);
+            $sheet->setCellValue('D362', $design->pvPart12);
+            $sheet->setCellValue('D363', $design->pvPart13);
+
+            $sheet->setCellValue('D367', $design->mvPart1);
+            $sheet->setCellValue('D368', $design->mvPart2);
+            $sheet->setCellValue('D369', $design->mvPart3);
+            $sheet->setCellValue('D370', $design->mvPart4);
+            $sheet->setCellValue('D371', $design->mvPart5);
+            $sheet->setCellValue('D372', $design->mvPart6);
+            $sheet->setCellValue('D373', $design->mvPart7);
+            $sheet->setCellValue('D374', $design->mvPart8);
+            $sheet->setCellValue('D375', $design->mvPart9);
+            $sheet->setCellValue('D376', $design->mvPart10);
+            $sheet->setCellValue('D377', $design->mvPart11);
+            $sheet->setCellValue('D378', $design->mvPart12);
+            $sheet->setCellValue('D379', $design->mvPart13);
+
+            Log::info("Updated PV and MV section of Data");
+
+            // Set metaList cells
+            $startingRow = 281;
+            $endingRow = 302;
+            foreach ($design->metaList as $item) {
+                $sheet->setCellValue('L' . $startingRow, $item['width']);
+                $sheet->setCellValue('M' . $startingRow, $item['quantity']);
+                $startingRow++;
+            } 
+            for ($i = $startingRow; $i <= $endingRow; $i++) {
+                $sheet->setCellValue('L' . $i, "");
+                $sheet->setCellValue('M' . $i, "");
+            }
+
+            Log::info("Updated metaList section of Data");
+
+            // Set srRoofSection cells
+            $sheet->setCellValue('L306', $design->srKonShir);
+            $sheet->setCellValue('L307', $design->srKonOneSkat);
+            $sheet->setCellValue('L311', $design->srEndn);
+            $sheet->setCellValue('L312', $design->srEndv);
+            $sheet->setCellValue('L313', $design->srGvozd);
+            $sheet->setCellValue('L314', $design->srSam70);
+            $sheet->setCellValue('L315', $design->srPack);
+            $sheet->setCellValue('L316', $design->srIzospanAM);
+            $sheet->setCellValue('L317', $design->srIzospanAM35);
+            $sheet->setCellValue('L322', $design->srPrimUgol);
+            $sheet->setCellValue('L323', $design->srPrimNakl);
+
+            Log::info("Updated srRoofSection section of Data. Data sheet completed. Moving to Balki");
             
             $sheet = $spreadsheet->getSheetByName('балки');
             $startingIndex = 15;
+            $endingIndex = 40;
+            // Mapping of floor names to numbers/letters
+            $floorMapping = [
+                "\u041f\u0435\u0440\u0432\u044b\u0439" => '1', // Первый
+                "\u0412\u0442\u043e\u0440\u043e\u0439" => '2', // Второй
+                "\u0422\u0440\u0435\u0442\u0438\u0439" => '3', // Третий
+                "\u0427\u0435\u0440\u0434\u0430\u043a" => 'Ч'  // Чердак
+            ];
+
             foreach ($design->floorsList as $room) {
-                $sheet->setCellValue('E'. $startingIndex, $room['length']);
-                $sheet->setCellValue('F'. $startingIndex, $room['width']);
+                $floorNumber = $floorMapping[$room['floors']] ?? ''; // Default to empty if not found
+                $sheet->setCellValue('E' . $startingIndex, $room['length']);
+                $sheet->setCellValue('F' . $startingIndex, $room['width']);
+                $sheet->setCellValue('G' . $startingIndex, 630);
+                $sheet->setCellValue('H' . $startingIndex, $floorNumber);
                 $startingIndex++;
             }
-            $sheet->setCellValue('P15', "=UNIQUE(E15:E40)");
 
-            //save changes done so far
+            for ($i = $startingIndex; $i <= $endingIndex; $i++) {
+                $sheet->setCellValue('E' . $i, "");
+                $sheet->setCellValue('F' . $i, "");
+                $sheet->setCellValue('G' . $i, "");
+                $sheet->setCellValue('H' . $i, "");
+            }
+
+            $sheet->setCellValue('P15', "=UNIQUE(E15:E40)");
 
             Log::info("Balki completed");
 
@@ -183,11 +265,7 @@ class FulfillmentController extends Controller
                 $filename = $designId . "_" . time();
                 $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
                 $writer->save($newFilePath);
-                if ($debug) {
-                    //log value of D283 in 'data' sheet
-                    Log::info("Value of D283 in 'data' sheet: " . $spreadsheet->getSheetByName('data')->getCell('D283')->getCalculatedValue());
-                }
-                // Return the new file path
+                // Return the new file
                 return response()->download($newFilePath);
             }
             
