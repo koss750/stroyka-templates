@@ -178,16 +178,16 @@ class TemplateController extends Controller
         }
 
         if ($foundCell) {
-            $worksheet->setCellValue('C3', "=$foundCell");
-            Log::info("Set cell C3 to address $foundCell");
-
             list($col, $row) = Coordinate::coordinateFromString($foundCell);
+            $cellC3 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 3);
+            $worksheet->setCellValue('C3', "=$cellC3");
+            Log::info("Set cell C3 to address $cellC3");
 
-            $cellC4 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 4);
+            $cellC4 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 7);
             $worksheet->setCellValue('C4', "=$cellC4");
             Log::info("Set cell C4 to address $cellC4");
 
-            $cellC5 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 8);
+            $cellC5 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 10);
             $worksheet->setCellValue('C5', "=$cellC5");
             Log::info("Set cell C5 to address $cellC5");
              // Set font color to white
