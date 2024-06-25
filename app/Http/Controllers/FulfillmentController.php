@@ -29,6 +29,13 @@ class FulfillmentController extends Controller
         return response()->json(['message' => 'Reindexing job dispatched'], 200);
     }
 
+    public function createSmeta($design, $config)
+    {
+        $filePath = storage_path("app/templates/Главный");
+        $design = Design::find($design);
+        return $this->spreadsheetService->handle($filePath, $design, true, false, 1, $config);
+    }
+
     public function process(Request $request)
     {
         if ($request->has('debug') && $request->debug > 0) {
@@ -63,6 +70,9 @@ class FulfillmentController extends Controller
         if ($sheetname == 'all') {
             $filePath = $this->spreadsheetService->handle($filePath, $design, false);
             return response()->download($filePath);
-        } else throw new \Exception("Only 'all' sheetname is supported for now");
+        } else {
+            $filePath = $this->spreadsheetService->handle($filePath, $design, false, true);
+            return response()->download($filePath);
+        }
     }
 }

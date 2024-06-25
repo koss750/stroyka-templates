@@ -58,12 +58,11 @@
             @include('template_box', [
                 'template' => $sr,
                 'category' => 'sr',
-                'title' => 'Свайно-растверковый',
+                'title' => 'Свайно-��стверковый',
                 'name' => 'Свайно-растверковый'
             ])
         </div>
 
-<!-- Main Template Modal -->
 <!-- Main Template Modal -->
 <div class="modal fade" id="mainModal" tabindex="-1" role="dialog" aria-labelledby="mainModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -82,15 +81,17 @@
                     <input type="hidden" name="design" id="designId">
                 </div>
                     <div class="form-group">
-                        <label for="variant">Размер ленты:</label>
-                        <input type="text" class="form-control" name="variant" value="600x300" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="hidden" class="form-control" name="sheetname" value="all">
+                        <input type="hidden" class="form-control" name="variant" value="600x300" required>
                     </div>
                     <div class="form-group form-check">
-                        <input type="checkbox" class="form-check-input" name="labour">
+                        <input type="checkbox" class="form-check-input" name="labour" id="labourCheckbox" checked>
                         <label class="form-check-label" for="labour">Включить цены за работы</label>
+                    </div>
+                    <div class="form-group" id="sheetnameGroup" style="display: none;">
+                        <label for="sheetnameInput">Название листа (не работает, галочку на работах оставляем пока):</label>
+                        <input type="text" class="form-control" id="sheetnameInput" list="sheetnameSuggestions">
+                        <datalist id="sheetnameSuggestions"></datalist>
+                        <input type="hidden" name="sheetname" id="sheetnameHidden" value="all">
                     </div>
                     <input type="hidden" name="filename" value="{{ $mainTemplate->name }}">
                     <input type="hidden" name="debug" value="1"/>
@@ -242,10 +243,18 @@
         messageElement.classList.add('message');
         designInput.parentNode.insertBefore(messageElement, designInput.nextSibling);
 
+        const labourCheckbox = document.getElementById('labourCheckbox');
+        const sheetnameGroup = document.getElementById('sheetnameGroup');
+        const sheetnameInput = document.getElementById('sheetnameInput');
+        const sheetnameHidden = document.getElementById('sheetnameHidden');
+        const sheetnameSuggestions = document.getElementById('sheetnameSuggestions');
+        const sheetnameMessage = document.createElement('div');
+        sheetnameMessage.classList.add('message');
+        sheetnameGroup.appendChild(sheetnameMessage);
+
         designInput.addEventListener('input', function() {
             const designTitle = this.value;
             if (designTitle) {
-                // Make a request to fetch the project ID based on the title
                 fetch('/get-project-id?title=' + encodeURIComponent(designTitle))
                     .then(response => response.json())
                     .then(data => {
@@ -267,6 +276,65 @@
             } else {
                 designIdInput.value = '';
                 messageElement.textContent = '';
+            }
+        });
+
+        labourCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                sheetnameGroup.style.display = 'none';
+                sheetnameHidden.value = 'all';
+            } else {
+                sheetnameGroup.style.display = 'block';
+                sheetnameHidden.value = '';
+            }
+        });
+
+        sheetnameInput.addEventListener('input', function() {
+            const sheetname = this.value;
+            if (sheetname) {
+                fetch('/get-sheetname?name=' + encodeURIComponent(sheetname))
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            sheetnameHidden.value = data.name;
+                            sheetnameMessage.textContent = 'Лист найден';
+                            sheetnameMessage.style.color = 'green';
+                        } else {
+                            sheetnameHidden.value = '';
+                            sheetnameMessage.textContent = 'Лист не найден';
+                            sheetnameMessage.style.color = 'red';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        sheetnameMessage.textContent = 'Ошибка при поиске листа';
+                        sheetnameMessage.style.color = 'red';
+                    });
+
+                // Fetch suggestions for the sheetname
+                fetch('/get-sheetname-suggestions?query=' + encodeURIComponent(sheetname))
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Suggestions response:', data); // Debugging line
+                        if (data.success) {
+                            sheetnameSuggestions.innerHTML = '';
+                            data.suggestions.forEach(suggestion => {
+                                const option = document.createElement('option');
+                                option.value = suggestion;
+                                sheetnameSuggestions.appendChild(option);
+                            });
+                            console.log('Suggestions added to datalist:', sheetnameSuggestions.innerHTML); // Debugging line
+                        } else {
+                            console.error('No suggestions found');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching suggestions:', error);
+                    });
+            } else {
+                sheetnameHidden.value = '';
+                sheetnameMessage.textContent = '';
+                sheetnameSuggestions.innerHTML = '';
             }
         });
     });

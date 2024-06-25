@@ -67,6 +67,8 @@ class ReindexProjectsJob implements ShouldQueue
                 throw new \Exception("File does not exist.");
             }
 
+            // Reset calculation cache
+            Redis::flushall();
             // Get all InvoiceType objects and store their sheetnames and labels in Redis
             $invoiceTypeObject = InvoiceType::all();
             foreach ($invoiceTypeObject as $invoiceType) {

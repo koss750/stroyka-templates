@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Redis;
 use PhpOffice\PhpSpreadsheet\Calculation\Calculation;
 use App\Models\Design;
 use Illuminate\Support\Collection;
+use App\Models\Invoicetype;
 
 class SpreadsheetService
 {
@@ -127,30 +128,106 @@ class SpreadsheetService
             ]
         ];
     }
-
-    public function handle($filePath, $design=1, $multiple=false, $debug=1) {
-        
+    public function handle($filePath, $design=1, $multiple=false, $labour=true, $debug=1, $config=null) {
         try {
             $spreadsheet = IOFactory::createReader('Xlsx')->load($filePath);
         } catch (\Exception $e) {
             throw $e;
         }
-        if ($multiple && $design instanceof Collection) {
-            $designs = $design; //actually is a collection
-            foreach ($designs as $design) {
-                $this->handlePriceIndexing($spreadsheet, $design);
-            }
-        } else if ($multiple && !$design instanceof Collection) {
-            throw new \Exception("Design is not a collection");
-        } else {
+
+        if ($config) {
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-            $spreadsheet = $this->handlePriceIndexing($spreadsheet, $design);
+            Calculation::getInstance($spreadsheet)->clearCalculationCache();
+            $this->processDatasheet($spreadsheet, $design);
             $filename = $design->id . "_" . time();
             $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
             $writer->save($newFilePath);
+
             return $newFilePath;
         }
+
+        $this->processDatasheet($spreadsheet, $design);
+
+        if ($multiple) {
+            $this->handlePriceIndexing($spreadsheet, $design);
+        }
+
+        if ($labour) {
+            $this->handleLabourCosts($spreadsheet, $design);
+        }
+
+        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+        Calculation::getInstance($spreadsheet)->clearCalculationCache();
+
+        $filename = $design->id . "_" . time();
+        $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
+        $writer->save($newFilePath);
+
+        return $newFilePath;
     }
+
+    private function processConfiguredSheets($spreadsheet, $design, $config)
+{
+    Calculation::getInstance($spreadsheet)->clearCalculationCache();
+    $this->processDatasheet($spreadsheet, $design);
+
+    $newSpreadsheet = new Spreadsheet();
+    $newSpreadsheet->removeSheetByIndex(0); // Remove default sheet
+
+    $sheetsToCombine = $this->getSheetsToCombine($config);
+
+    $sheetIndex = 0;
+    $newSheet = $newSpreadsheet->createSheet($sheetIndex);
+    $newSheet->setTitle("Смета");
+    $newSheetRow = 1;
+    foreach ($sheetsToCombine as $invoice) {
+        $sheet = $spreadsheet->getSheetByName($sheetName);
+        
+        if ($spreadsheet->sheetNameExists($sheetName)) {
+            // Get the last row to process
+            if ($sheetIndex == 0) {
+                $row = 1;
+            } else $row = 8;
+            $lastRow = $sheet->getCell('C3')->getValue();
+            $lastRow = substr($lastRow, 2);
+
+            // Iterate only up to the relevant number of rows and columns
+            for ($row; $row <= $lastRow; $row++) {
+                for ($col = 'A'; $col <= 'N'; $col++) {
+                    $cellValue = $sheet->getCell($col . $row)->getCalculatedValue();
+                    $newSheet->setCellValue($col . $newSheetRow, $cellValue);
+                    $newSheetRow++;
+                    // Copy cell style
+                    $newSheet->getStyle($col . $newSheetRow)->applyFromArray(
+                        $sheet->getStyle($col . $row)->exportArray()
+                    );
+                }
+            }
+            if ($sheetIndex == 0) {
+                // Copy merged cells
+                foreach ($sheet->getMergeCells() as $mergeCell) {
+                    $newSheet->mergeCells($mergeCell);
+                }
+                // Copy column dimensions
+                foreach ($sheet->getColumnDimensions() as $colDim) {
+                    $newSheet->getColumnDimension($colDim->getColumnIndex())
+                        ->setWidth($colDim->getWidth());
+                }
+            }
+
+            
+
+            $sheetIndex++;
+        }
+    }
+
+    $writer = IOFactory::createWriter($newSpreadsheet, 'Xlsx');
+    $filename = $design->id . "_" . time() . "_configured";
+    $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
+    $writer->save($newFilePath);
+    return $newFilePath;
+}
+
 
     public function handlePriceIndexing($spreadsheet, $design)
     {

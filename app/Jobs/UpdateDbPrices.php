@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Redis;
 use App\Models\InvoiceType;
+use App\Models\ProjectPrice;
 
 class UpdateDbPrices implements ShouldQueue
 {
@@ -26,17 +27,29 @@ class UpdateDbPrices implements ShouldQueue
         Log::info("Updating db prices");
         //get all the designs
         $designs = Design::where('active', 1)->get();
+        $invoiceTypes = InvoiceType::where('site_level4_label', '!=', 'FALSE')->get();
         //get price from redis for each design
         foreach ($designs as $design) {
+            ProjectPrice::where('design_id', $design->id)->delete();
             try {
-                $price = Redis::get($design->id);
-                Log::info("Price for design " . $design->id . ": " . $price);
+                foreach ($invoiceTypes as $invoiceType) {
+                    $price = Redis::get($design->id . '_' . $invoiceType->label);
+                    if ($price) {
+                        $projectPrice = ProjectPrice::create([
+                            'design_id' => $design->id,
+                            'invoice_type_id' => $invoiceType->id,
+                            'price' => $price,
+                        ]);
+                        Log::info("Project price created for design " . $design->id . " and invoice type " . $invoiceType->label . ": " . $projectPrice->id);
+                    }
+                }
             } catch (\Exception $e) {
                 Log::error("Error getting price from redis for design " . $design->id . ": " . $e->getMessage());
                 continue;
             }
             //put price into an array and then store as json
-            $priceArray = ['price' => $price];
+            $price = json_decode($price, true);
+            $priceArray = ['price' => $price["material"]];
             if (!is_null($design->details)) {
                 try {
                     $details = json_decode($design->details, true);

@@ -179,21 +179,25 @@ class TemplateController extends Controller
 
         if ($foundCell) {
             list($col, $row) = Coordinate::coordinateFromString($foundCell);
-            $cellC3 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 3);
+            $worksheet->removeRow($row + 9, 2);
+            $cellC3 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row);
             $worksheet->setCellValue('C3', "=$cellC3");
             Log::info("Set cell C3 to address $cellC3");
 
-            $cellC4 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 7);
+            $cellC4 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 4);
             $worksheet->setCellValue('C4', "=$cellC4");
             Log::info("Set cell C4 to address $cellC4");
 
-            $cellC5 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 10);
-            $worksheet->setCellValue('C5', "=$cellC5");
+            $deliveryCost = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 6);
+            Log::info("Set cell $deliveryCost to address $deliveryCost");
+
+            $cellC5 = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($col)) . ($row + 8);
+            $worksheet->setCellValue('C5', "=$cellC5" . "-" . $deliveryCost);
             Log::info("Set cell C5 to address $cellC5");
              // Set font color to white
-        $worksheet->getStyle('C3')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
-        $worksheet->getStyle('C4')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
-        $worksheet->getStyle('C5')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+            $worksheet->getStyle('C3')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+            $worksheet->getStyle('C4')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+            $worksheet->getStyle('C5')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
         } else {
             Log::warning("Phrase '$searchPhrase' not found in the specified range.");
         }
