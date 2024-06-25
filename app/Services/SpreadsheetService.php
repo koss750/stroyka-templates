@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Redis;
 use PhpOffice\PhpSpreadsheet\Calculation\Calculation;
 use App\Models\Design;
 use Illuminate\Support\Collection;
-use App\Models\Invoicetype;
+use App\Models\InvoiceType;
 
 class SpreadsheetService
 {
@@ -136,13 +136,7 @@ class SpreadsheetService
         }
 
         if ($config) {
-            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-            Calculation::getInstance($spreadsheet)->clearCalculationCache();
-            $this->processDatasheet($spreadsheet, $design);
-            $filename = $design->id . "_" . time();
-            $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
-            $writer->save($newFilePath);
-
+            $newFilePath = $this->processConfiguredSheets($spreadsheet, $design, $config);
             return $newFilePath;
         }
 
@@ -166,6 +160,15 @@ class SpreadsheetService
         return $newFilePath;
     }
 
+    private function getSheetsToCombine($config) {
+        $sheetsToCombine = [];
+        foreach ($config as $sheetName => $sheetConfig) {
+            $sheet = InvoiceType::where('ref', $sheetConfig)->firstOrFail();
+            $sheetsToCombine[] = [$sheet->label, $sheet->sheetname];
+        }
+        return $sheetsToCombine;
+    }
+
     private function processConfiguredSheets($spreadsheet, $design, $config)
 {
     Calculation::getInstance($spreadsheet)->clearCalculationCache();
@@ -180,28 +183,27 @@ class SpreadsheetService
     $newSheet = $newSpreadsheet->createSheet($sheetIndex);
     $newSheet->setTitle("Смета");
     $newSheetRow = 1;
-    foreach ($sheetsToCombine as $invoice) {
-        $sheet = $spreadsheet->getSheetByName($sheetName);
-        
-        if ($spreadsheet->sheetNameExists($sheetName)) {
+    foreach ($sheetsToCombine as $sheetName) {
+        $sheet = $spreadsheet->getSheetByName($sheetName[1]);
+        if ($spreadsheet->sheetNameExists($sheetName[1])) {
             // Get the last row to process
             if ($sheetIndex == 0) {
                 $row = 1;
             } else $row = 8;
             $lastRow = $sheet->getCell('C3')->getValue();
-            $lastRow = substr($lastRow, 2);
+            $lastRow = substr($lastRow, 2)-1;
 
             // Iterate only up to the relevant number of rows and columns
             for ($row; $row <= $lastRow; $row++) {
                 for ($col = 'A'; $col <= 'N'; $col++) {
                     $cellValue = $sheet->getCell($col . $row)->getCalculatedValue();
                     $newSheet->setCellValue($col . $newSheetRow, $cellValue);
-                    $newSheetRow++;
                     // Copy cell style
                     $newSheet->getStyle($col . $newSheetRow)->applyFromArray(
                         $sheet->getStyle($col . $row)->exportArray()
                     );
                 }
+                $newSheetRow++;
             }
             if ($sheetIndex == 0) {
                 // Copy merged cells
@@ -214,9 +216,6 @@ class SpreadsheetService
                         ->setWidth($colDim->getWidth());
                 }
             }
-
-            
-
             $sheetIndex++;
         }
     }

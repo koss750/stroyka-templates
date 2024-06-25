@@ -48,8 +48,8 @@ class UpdateDbPrices implements ShouldQueue
                 continue;
             }
             //put price into an array and then store as json
-            $price = json_decode($price, true);
-            $priceArray = ['price' => $price["material"]];
+            $price = Redis::get($design->id);
+            $priceArray = ['price' => $price];
             if (!is_null($design->details)) {
                 try {
                     $details = json_decode($design->details, true);
