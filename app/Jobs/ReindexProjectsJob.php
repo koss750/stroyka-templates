@@ -53,6 +53,7 @@ class ReindexProjectsJob implements ShouldQueue
         try {
             $latestProjects = Design::orderBy("created_at", "desc")
                 ->where('active', 1)
+                ->orWhere('id', 1)
                 ->take($this->projectCount)
                 ->get();
             Log::info("Fetched latest projects", [

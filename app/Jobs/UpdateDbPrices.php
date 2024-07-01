@@ -40,7 +40,13 @@ class UpdateDbPrices implements ShouldQueue
                             'invoice_type_id' => $invoiceType->id,
                             'price' => $price,
                         ]);
-                        Log::info("Project price created for design " . $design->id . " and invoice type " . $invoiceType->label . ": " . $projectPrice->id);
+                    }
+                    else if ($invoiceType->id == 312 || $invoiceType->id == 173) {
+                        $projectPrice = ProjectPrice::create([
+                            'design_id' => $design->id,
+                            'invoice_type_id' => $invoiceType->id,
+                            'price' => '{"labour":0,"material":0,"total":0}',
+                        ]);
                     }
                 }
             } catch (\Exception $e) {
@@ -50,6 +56,7 @@ class UpdateDbPrices implements ShouldQueue
             //put price into an array and then store as json
             $price = Redis::get($design->id);
             $priceArray = ['price' => $price];
+            $details = $priceArray;
             if (!is_null($design->details)) {
                 try {
                     $details = json_decode($design->details, true);
