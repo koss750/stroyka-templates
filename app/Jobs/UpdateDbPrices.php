@@ -53,24 +53,6 @@ class UpdateDbPrices implements ShouldQueue
                 Log::error("Error getting price from redis for design " . $design->id . ": " . $e->getMessage());
                 continue;
             }
-            //put price into an array and then store as json
-            $price = Redis::get($design->id);
-            $priceArray = ['price' => $price];
-            $details = $priceArray;
-            if (!is_null($design->details)) {
-                try {
-                    $details = json_decode($design->details, true);
-                    if (is_array($details)) {
-                        $details = array_merge($details, $priceArray);
-                    } else {
-                        $details = $priceArray;
-                    }
-                } catch (\Exception $e) {
-                    Log::error("Error merging price into details for design " . $design->id . ": " . $e->getMessage());
-                    $details = $priceArray;
-                }
-            }
-            $design->update(['details' => json_encode($details)]);
         }
     }
 }

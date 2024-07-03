@@ -62,7 +62,7 @@ class ReindexProjectsJob implements ShouldQueue
 
             $results = [];
 
-            $filename = "Главный";
+            $filename = "Главный.xlsx";
             $filePath = storage_path("app/templates/" . $filename);
             if (!file_exists($filePath)) {
                 throw new \Exception("File does not exist.");

@@ -75,10 +75,13 @@
                     </div>
                     <input type="hidden" name="name" value="{{ $name }}"/>
                     <button type="submit" class="btn btn-primary">Загрузить</button>
+                    
                 </form>
             @endif
             @if($category == 'main')
+            <a class="btn btn-success mt-2" style="display: none;" href="{{ route('download-template', ['category' => $category]) }}">Скачать шаблон</a>
                 <button class="btn btn-secondary mt-2" data-toggle="modal" data-target="#{{ $category }}Modal">Сгенерировать смету</button>
+                
             @endif
         </div>
     </div>

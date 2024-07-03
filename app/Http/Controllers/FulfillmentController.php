@@ -31,7 +31,7 @@ class FulfillmentController extends Controller
 
     public function createSmeta($design, $config)
     {
-        $filePath = storage_path("app/templates/Главный");
+        $filePath = storage_path("app/templates/Главный.xlsx");
         $design = Design::find($design);
         return $this->spreadsheetService->handle($filePath, $design, true, false, 1, $config);
     }

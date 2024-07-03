@@ -26,6 +26,7 @@ Route::get('/reindex-prices/{count}', [FulfillmentController::class, 'processLat
 Route::post('/store-template', [TemplateController::class, 'storeTemplate'])->name('store-template');
 Route::put('/update-template/{id}', [TemplateController::class, 'updateTemplate'])->name('update-template');
 Route::get('/get-template', [TemplateController::class, 'getTemplate']);
+Route::get('/download-template/{category}', [TemplateController::class, 'downloadTemplate'])->name('download-template');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
