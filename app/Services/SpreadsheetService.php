@@ -21,9 +21,12 @@ class SpreadsheetService
     private $plitaVariationArray;
     private $metalAndPlasticVariationArray;
     private $exceptionalSheetsArray;
+    private $invoices;
 
     public function __construct()
     {
+        $this->invoices = InvoiceType::all();
+
         $this->cellMappings = [
             'fLenta' => [
                 'D4' => 'lfLength',
@@ -210,299 +213,447 @@ class SpreadsheetService
         $sheetsToCombine = [];
         $extraCols = false;
         foreach ($config as $sheetName => $sheetConfig) {
-            $sheet = InvoiceType::where('ref', $sheetConfig)->firstOrFail();
+            $sheet = $this->invoices->where('ref', $sheetConfig)->firstOrFail();
             $checkExtra = $this->checkExtraColumn($sheet->sheetname);
+            $parentLabel = $sheet->oldestParent->label;
+            if($sheet->label == "rNone" || $sheet->label == "fNone") {
+                continue;
+            }
             if($checkExtra) {
                 $extraCols = true;
             }
-            if ($sheet->label != "rNone" && $sheet->label != "fNone") {
-                $sheetsToCombine[$sheet->id] = [$sheet->label, $sheet->sheetname, $checkExtra, $sheet->title];
-            }
+            $sheetsToCombine[$parentLabel] = [$sheet->label, $sheet->sheetname, $checkExtra, $sheet->title, $sheet->sheet_spec];
         }
         $sheetsToCombine["extra"] = $extraCols;
         return $sheetsToCombine;
     }
 
     private function processConfiguredSheets($spreadsheet, $design, $config)
-{
-    Calculation::getInstance($spreadsheet)->clearCalculationCache();
-    $this->processDatasheet($spreadsheet, $design);
-    $newSpreadsheet = new Spreadsheet();
-    $newSpreadsheet->removeSheetByIndex(0); // Remove default sheet
-    $sheetsToCombine = $this->getSheetsToCombine($config);
-    $extraCol = $sheetsToCombine["extra"];
-    unset($sheetsToCombine["extra"]);
-    $sheetIndex = 0;
-    $newSheet = $newSpreadsheet->createSheet($sheetIndex);
-    $newSheet->setTitle("Смета");
-    $newSheetRow = 1;
-    $lastIteration = false;
-    $sumsSection = [];
-    Calculation::getInstance($spreadsheet)->clearCalculationCache();
-    foreach ($sheetsToCombine as $sheetItem) {
-        foreach ($this->exceptionalSheetsArray as $exception) {
-            if (strpos($sheetItem[1], $exception) !== false) {
-                switch ($exception) {
-                    case "СВ-Рост":
-                        $sheet = $spreadsheet->getSheetByName("data");
-                        foreach ($this->fVariationArray as $size) {
-                            if ($sheetItem[3] == $size[0]) {
-                                $sheet->setCellValue('D5', $size[2]);
-                                $sheet->setCellValue('D8', $size[1]);
-                            }
-                        }
-                        break;
-                    case "плита":
-                        $sheet = $spreadsheet->getSheetByName("data");
-                        foreach ($this->plitaVariationArray as $size) {
-                            if ($sheetItem[0] == $size[1]) {
-                                $sheet->setCellValue('D87', $size[0]);
-                            }
-                        }
-                        break;
-                    case "лента":
-                        $sheet = $spreadsheet->getSheetByName("data");
-                        foreach ($this->fVariationArray as $size) {
-                            if ($sheetItem[3] == $size[0]) {
-                                $sheet->setCellValue('D5', $size[2]);
-                                $sheet->setCellValue('D8', $size[1]);
-                            }
-                        }
-                        break;
-                    case "Железо":
-                        $sheet = $spreadsheet->getSheetByName("Смета Железо");
-                        $sheet->getStyle('G41')->getFont()->setSize(12);
-                        //remove first character from C3 and add it back
-                        $C3row = substr($sheet->getCell('C3')->getValue(), 2);
-                        $C3col = $sheet->getCell('C3')->getValue();
-                        $C3col = $C3col[1];
-                        //dealing with Vodostok
-                        if ($sheetItem[3] == "Железо, пластик") {
-                            $startIndex = 97;
-                            $endRow = 112;
-                            $rowsToDelete = $endRow - $startIndex;
-                            $sheet->removeRow($startIndex, $rowsToDelete);
-                        } else if ($sheetItem[3] == "Железо, метал") {
-                            $startIndex = 82;
-                            $endRow = 97;
-                            $rowsToDelete = $endRow - $startIndex;
-                            $sheet->removeRow($startIndex, $rowsToDelete);
-                        } else throw new Exception("Неизвестный тип водостока");
-                        //removing rows for unnecessary metaList lines
-                        $deletedRows = $rowsToDelete;
-                        $metaList = ($design->metaList);
-                        $size = count($metaList);
-                        $startIndex = 42;
-                        $endIndex = 63;
-                        $rowsToDelete = $endIndex - $startIndex - $size +1;
-                        $firstRowToDelete = $startIndex + $size;
-                        $sheet->removeRow($firstRowToDelete, $rowsToDelete);
-                        $deletedRows += $rowsToDelete;
-                        $C3row -= $deletedRows;
-                        $sheet->setCellValue('C3', "r" . $C3col . $C3row);
-                        break;
-                    case "Мягкая":
-                        $sheet = $spreadsheet->getSheetByName("Смета Мягкая");
-                        $C3row = substr($sheet->getCell('C3')->getValue(), 2);
-                        $C3col = $sheet->getCell('C3')->getValue();
-                        $C3col = $C3col[1];
-                        //dealing with Vodostok
-                        if ($sheetItem[3] == "Мягкая, пластик") {
-                            $startIndex = 78;
-                            $endRow = 93;
-                            $rowsToDelete = $endRow - $startIndex + 1;
-                            $sheet->removeRow($startIndex, $rowsToDelete);
-                        } else if ($sheetItem[3] == "Мягкая, метал") {
-                            $startIndex = 63;
-                            $endRow = 78;
-                            $rowsToDelete = $endRow - $startIndex;
-                            $sheet->removeRow($startIndex, $rowsToDelete);
-                        } else throw new Exception("Неизвестный тип водостока");
-                        $C3row -= $rowsToDelete;
-                        $sheet->setCellValue('C3', "r" . $C3col . $C3row);
-                        break;
-                }
-            }
-        }
-    }
-    Calculation::getInstance($spreadsheet)->clearCalculationCache();
-    foreach ($sheetsToCombine as $sheet) {
-        //is it the last iteration
-        if ($sheetIndex == count($sheetsToCombine)-1) {
-            $lastIteration = true;
-        }
-        $sheetTitle = $sheet[1];
-        $skipCol = $sheet[2];
-        $invoiceType = InvoiceType::where('sheetname', $sheet[1])->firstOrFail();
-        $spec = $invoiceType->sheet_spec;
-        $sheet = $spreadsheet->getSheetByName($sheetTitle);
-        Log::info("Processing sheet: " . $sheetTitle . ". Skip col: " . ($skipCol+$extraCol));
-
+    {
+        $this->prepareSpreadsheet($spreadsheet, $design);
+        $newSpreadsheet = $this->createNewSpreadsheet();
+        $sheetsToCombine = $this->getSheetsToCombine($config);
         
+        $this->processExceptionalSheets($spreadsheet, $sheetsToCombine, $design);
+        
+        $newSheet = $this->combineSheets($spreadsheet, $newSpreadsheet, $sheetsToCombine, $design);
+        
+        return $this->saveNewSpreadsheet($newSpreadsheet, $design);
+    }
 
+    private function prepareSpreadsheet($spreadsheet, $design)
+    {
+        Calculation::getInstance($spreadsheet)->clearCalculationCache();
+        $this->processDatasheet($spreadsheet, $design);
+    }
 
-        if ($spreadsheet->sheetNameExists($sheetTitle)) {
-            if ($lastIteration) {
-                //map all column widths for first M cols
-                for ($i = "A"; $i <= "M"; $i++) {
-                    $newSheet->getColumnDimension($i)->setWidth($sheet->getColumnDimension($i)->getWidth());
-                }
-            }
-            $thisSheetWithExtraCols = false;
-            if ((($skipCol+$extraCol) != 2) && isset($extraCol) && $extraCol == true) {
-                //insert row after C3
-                $sheet->insertNewColumnBefore('C', 1);
-                $sheet->insertNewColumnBefore('I', 1);
-                Log::info("Inserting row before C");
-                $lastRow = $sheet->getCell('D3')->getValue();
-                $thisSheetWithExtraCols = true;
-            } else {
-                Log::info("Not inserting row before C");
-                $lastRow = $sheet->getCell('C3')->getValue();
-            }
-            $totalsBoxStart = substr($lastRow, 1);
-            Log::info("Totals box start: " . $totalsBoxStart);
-            $sumsSection = $this->updateRunningTotals($sheet, $totalsBoxStart, $sumsSection);
-            if ($lastIteration) {
-                Log::info("Last iteration");
-                $lastRow = substr($lastRow, 2)+7;
-            } else {
-                Log::info("Not last iteration");
-                $lastRow = substr($lastRow, 2)-1;
-            }
-            
-            $firstNewSheetRow = $newSheetRow;
-            $lastNewSheetRow = $newSheetRow + $lastRow;
-            
-            if ($sheetIndex == 0) {
-                $row = 1;
-            } else $row = 7;
-            // Iterate only up to the relevant number of rows and columns
-            for ($row; $row <= $lastRow; $row++) {
-                $newSheetCol = 'A';
-                for ($col = 'A'; $col <= 'N'; $col++) {
-                    /*
-                    if ($skipCol && ($col == 'C' || $col == 'H')) {
-                        continue;
-                    }
-                    */
-                    $cellValue = $sheet->getCell($col . $row)->getCalculatedValue();
-                    $newSheet->setCellValue($newSheetCol . $newSheetRow, $cellValue);
-                    // Copy cell style
-                    $newSheet->getStyle($newSheetCol . $newSheetRow)->applyFromArray(
-                        $sheet->getStyle($col . $row)->exportArray()
-                    );
-                    $newSheetCol++;
-                }
-                $newSheetRow++;
-            }
-            if ($sheetIndex == 0) {
-                // For the first sheet, merge all rows without offset up to $lastNewSheetRow
-                foreach ($sheet->getMergeCells() as $mergeCell) {
-                    $mergeCellRange = Coordinate::extractAllCellReferencesInRange($mergeCell);
-                    $firstCell = $mergeCellRange[0];
-                    $lastCell = $mergeCellRange[count($mergeCellRange) - 1];
-                    
-                    $firstColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($firstCell)[0]);
-                    $lastColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($lastCell)[0]);
-                    
-                    $firstRow = Coordinate::coordinateFromString($firstCell)[1];
-                    $lastMergeRow = Coordinate::coordinateFromString($lastCell)[1];
-                    
-                    if ($lastMergeRow <= $lastNewSheetRow) {
-                        $newMergeRange = Coordinate::stringFromColumnIndex($firstColumn) . $firstRow . ':' . 
-                                         Coordinate::stringFromColumnIndex($lastColumn) . $lastMergeRow;
-                        $newSheet->mergeCells($newMergeRange);
-                    }
-                }
-            } else {
-                // For subsequent sheets, map A7:M$lastRow onto A$firstNewSheetRow:M$lastNewSheetRow
-                foreach ($sheet->getMergeCells() as $mergeCell) {
-                    $mergeCellRange = Coordinate::extractAllCellReferencesInRange($mergeCell);
-                    $firstCell = $mergeCellRange[0];
-                    $lastCell = $mergeCellRange[count($mergeCellRange) - 1];
-                    
-                    $firstColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($firstCell)[0]);
-                    $lastColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($lastCell)[0]);
-                    
-                    $firstRow = Coordinate::coordinateFromString($firstCell)[1];
-                    $lastMergeRow = Coordinate::coordinateFromString($lastCell)[1];
-                    
-                    if ($firstRow >= 7 && $lastMergeRow <= $lastRow) {
-                        $newFirstRow = $firstNewSheetRow + ($firstRow - 7);
-                        $newLastRow = $firstNewSheetRow + ($lastMergeRow - 7);
-                        
-                        if ($newLastRow <= $lastNewSheetRow) {
-                            $newMergeRange = Coordinate::stringFromColumnIndex($firstColumn) . $newFirstRow . ':' . 
-                                             Coordinate::stringFromColumnIndex($lastColumn) . $newLastRow;
-                            $newSheet->mergeCells($newMergeRange);
-                        }
+    private function createNewSpreadsheet()
+    {
+        $newSpreadsheet = new Spreadsheet();
+        $newSpreadsheet->removeSheetByIndex(0);
+        return $newSpreadsheet;
+    }
+
+    private function processExceptionalSheets($spreadsheet, $sheetsToCombine, $design)
+    {
+        foreach ($sheetsToCombine as $sheetItem) {
+            foreach ($this->exceptionalSheetsArray as $exception) {
+                if (is_array($sheetItem)) {
+                    if (strpos($sheetItem[1], $exception) !== false) {
+                        $this->handleExceptionalSheet($spreadsheet, $exception, $sheetItem, $design);
                     }
                 }
             }
-            
-            if ($thisSheetWithExtraCols) {
-                if ($firstNewSheetRow<9) {
-                    $firstNewSheetRow = 9;
-                }
-                if ($sheetIndex == 1) {
-                    $lastNewSheetRow -=7;
-                }
-                for ($tempRow = $firstNewSheetRow; $tempRow <= $lastNewSheetRow; $tempRow++) {
-                    Log::info("Merging cells B" . $tempRow . ":C" . $tempRow);
-                    $newSheet->mergeCells('B' . $tempRow . ':C' . $tempRow);
-                    Log::info("Merging cells H" . $tempRow . ":I" . $tempRow);
-                    $newSheet->mergeCells('H' . $tempRow . ':I' . $tempRow);
-                }
-                $lastNewSheetRow += 7;
-            }
-            if ($lastIteration) {
-                $newSheet = $this->setRunningTotals($newSheet, $totalsBoxStart[0] . ($lastNewSheetRow-7), $sumsSection);
-            }
-            $sheetIndex++;
         }
     }
 
-    
+    private function handleExceptionalSheet($spreadsheet, $exception, $sheetItem, $design)
+    {
+        switch ($exception) {
+            case "СВ-Рост":
+                $this->handleSVRost($spreadsheet, $sheetItem);
+                break;
+            case "плита":
+                $this->handlePlita($spreadsheet, $sheetItem);
+                break;
+            case "лента":
+                $this->handleLenta($spreadsheet, $sheetItem);
+                break;
+            case "Железо":
+                $this->handleZhelezo($spreadsheet, $sheetItem, $design);
+                break;
+            case "Мягкая":
+                $this->handleMyagkaya($spreadsheet, $sheetItem);
+                break;
+        }
+    }
 
-    $writer = IOFactory::createWriter($newSpreadsheet, 'Xlsx');
-    $filename = $design->id . "_" . time() . "_configured";
-    $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
-    $writer->save($newFilePath);
-    return $newFilePath;
-}
+    private function handleSVRost($spreadsheet, $sheetItem)
+    {
+        $sheet = $spreadsheet->getSheetByName("data");
+        foreach ($this->fVariationArray as $size) {
+            if ($sheetItem[3] == $size[0]) {
+                $sheet->setCellValue('D5', $size[2]);
+                $sheet->setCellValue('D8', $size[1]);
+            }
+        }
+    }
+
+    private function handlePlita($spreadsheet, $sheetItem)
+    {
+        $sheet = $spreadsheet->getSheetByName("data");
+        foreach ($this->plitaVariationArray as $size) {
+            if ($sheetItem[0] == $size[1]) {
+                $sheet->setCellValue('D87', $size[0]);
+            }
+        }
+    }
+
+    private function handleLenta($spreadsheet, $sheetItem)
+    {
+        $sheet = $spreadsheet->getSheetByName("data");
+        foreach ($this->fVariationArray as $size) {
+            if ($sheetItem[3] == $size[0]) {
+                $sheet->setCellValue('D5', $size[2]);
+                $sheet->setCellValue('D8', $size[1]);
+            }
+        }
+    }
+
+    private function handleZhelezo($spreadsheet, $sheetItem, $design)
+    {
+        $sheet = $spreadsheet->getSheetByName("Смета Железо");
+        $sheet->getStyle('G41')->getFont()->setSize(12);
+        $C3row = substr($sheet->getCell('C3')->getValue(), 2);
+        $C3col = $sheet->getCell('C3')->getValue()[1];
+        
+        if ($sheetItem[3] == "Железо, пластик") {
+            $startIndex = 97;
+            $endRow = 112;
+        } elseif ($sheetItem[3] == "Железо, метал") {
+            $startIndex = 82;
+            $endRow = 97;
+        } else {
+            throw new Exception("Неизвестный тип водотока");
+        }
+        
+        $rowsToDelete = $endRow - $startIndex;
+        $sheet->removeRow($startIndex, $rowsToDelete);
+        
+        $metaList = $design->metaList;
+        $size = count($metaList);
+        $startIndex = 42;
+        $endIndex = 63;
+        $rowsToDelete += $endIndex - $startIndex - $size + 1;
+        $firstRowToDelete = $startIndex + $size;
+        $sheet->removeRow($firstRowToDelete, $rowsToDelete);
+        
+        $C3row -= $rowsToDelete;
+        $sheet->setCellValue('C3', "r" . $C3col . $C3row);
+    }
+
+    private function handleMyagkaya($spreadsheet, $sheetItem)
+    {
+        $sheet = $spreadsheet->getSheetByName("Смета Мягкая");
+        $C3row = substr($sheet->getCell('C3')->getValue(), 2);
+        $C3col = $sheet->getCell('C3')->getValue()[1];
+        
+        if ($sheetItem[3] == "Мягкая, пластик") {
+            $startIndex = 78;
+            $endRow = 93;
+        } elseif ($sheetItem[3] == "Мягкая, метал") {
+            $startIndex = 63;
+            $endRow = 78;
+        } else {
+            throw new Exception("Неизвестный тип водостока");
+        }
+        
+        $rowsToDelete = $endRow - $startIndex + 1;
+        $sheet->removeRow($startIndex, $rowsToDelete);
+        
+        $C3row -= $rowsToDelete;
+        $sheet->setCellValue('C3', "r" . $C3col . $C3row);
+    }
+
+    private function combineSheets($spreadsheet, $newSpreadsheet, $sheetsToCombine, $design)
+    {
+        $newSheet = $newSpreadsheet->createSheet(0);
+        $newSheet->setTitle("Смета");
+        $newSheetRow = 1;
+        $totalRowOffset = 0;
+        $sumsSection = [];
+        $extraCol = $sheetsToCombine["extra"] ?? false;
+        unset($sheetsToCombine["extra"]);
+        
+        $sortedSheets = $this->sortSheets($sheetsToCombine);
+        
+        foreach ($sortedSheets as $sheetIndex => $sheet) {
+            $sheetTitle = $sheet[1];
+            $skipCol = $sheet[2];
+            $invoiceType = InvoiceType::where('sheetname', $sheetTitle)->firstOrFail();
+            $spec = $invoiceType->sheet_spec;
+
+            $sheet = $spreadsheet->getSheetByName($sheetTitle);
+
+            if ($spreadsheet->sheetNameExists($sheetTitle)) {
+                $startRow = $newSheetRow;
+                
+                if ($invoiceType->oldestParent->label === 'd') {
+                    $this->adjustFloorsInSheet($sheet, $design->floorsNumber, $spec);
+                }
+                
+                $this->copySheetContent($sheet, $newSheet, $sheetIndex, $spec, $skipCol, $extraCol, $newSheetRow);
+                $totalRowOffset += $newSheetRow - $startRow;
+                $sumsSection = $this->updateRunningTotals($sheet, $spec, $sumsSection);
+
+                if ($sheetIndex == count($sortedSheets) - 1) {
+                    $this->setRunningTotals($newSheet, $spec, $sumsSection, $totalRowOffset);
+                }
+            }
+        }
+
+        return $newSheet;
+    }
+
+    private function sortSheets($sheetsToCombine)
+    {
+        $foundation = null;
+        $domokomplekt = null;
+        $roof = null;
+        $others = [];
+
+        foreach ($sheetsToCombine as $key => $sheet) {
+            $invoiceType = InvoiceType::where('sheetname', $sheet[1])->firstOrFail();
+            $label = $invoiceType->label;
+
+            if (strpos($label, 'f') === 0) {
+                $foundation = [$key => $sheet];
+            } elseif (strpos($label, 'd') === 0) {
+                $domokomplekt = [$key => $sheet];
+            } elseif (strpos($label, 'r') === 0) {
+                $roof = [$key => $sheet];
+            } else {
+                $others[$key] = $sheet;
+            }
+        }
+
+        $sortedSheets = array_merge(
+            $foundation ?? [],
+            $domokomplekt ?? [],
+            $roof ?? [],
+            $others
+        );
+
+        return $sortedSheets;
+    }
+
+    private function adjustFloorsInSheet($sheet, $floorsNumber, &$spec)
+    {
+        $floorSections = [
+            'floor1' => ['start' => null, 'end' => null],
+            'floor2' => ['start' => null, 'end' => null],
+            'floor3' => ['start' => null, 'end' => null],
+        ];
+
+        // Find the start and end rows for each floor section
+        foreach ($spec['sections'] as $section) {
+            if (strpos($section['title'], 'floor1') !== false) {
+                $floorSections['floor1']['start'] = $section['start'];
+                $floorSections['floor1']['end'] = $section['end'] ?? null;
+            } elseif (strpos($section['title'], 'floor2') !== false) {
+                $floorSections['floor2']['start'] = $section['start'];
+                $floorSections['floor2']['end'] = $section['end'] ?? null;
+            } elseif (strpos($section['title'], 'floor3') !== false) {
+                $floorSections['floor3']['start'] = $section['start'];
+                $floorSections['floor3']['end'] = $section['end'] ?? null;
+            }
+        }
+
+        // Determine which floors to remove
+        $floorsToRemove = [];
+        if ($floorsNumber < 3) {
+            $floorsToRemove[] = 'floor3';
+        }
+        if ($floorsNumber < 2) {
+            $floorsToRemove[] = 'floor2';
+        }
+
+        // Remove unnecessary floor sections
+        $totalRowsRemoved = 0;
+        foreach ($floorsToRemove as $floorToRemove) {
+            if ($floorSections[$floorToRemove]['start'] !== null) {
+                $startRow = $floorSections[$floorToRemove]['start'];
+                $endRow = $floorSections[$floorToRemove]['end'] ?? $sheet->getHighestRow();
+                $rowsToRemove = $endRow - $startRow + 1;
+                $sheet->removeRow($startRow, $rowsToRemove);
+                $totalRowsRemoved += $rowsToRemove;
+
+                // Adjust the start and end rows for the remaining sections
+                foreach ($spec['sections'] as &$section) {
+                    if ($section['start'] > $startRow) {
+                        $section['start'] -= $rowsToRemove;
+                    }
+                    if (isset($section['end']) && $section['end'] > $startRow) {
+                        $section['end'] -= $rowsToRemove;
+                    }
+                }
+            }
+        }
+    }
+
+    private function copySheetContent($sheet, $newSheet, $sheetIndex, $spec, $skipCol, $extraCol, &$newSheetRow)
+    {
+        $startRow = ($sheetIndex == 0) ? 1 : $spec['index_smeta_alt_start'];
+        $endRow = $spec['index_smeta_alt_end'];
+        if(!$skipCol) {
+            //insert new col before C and H
+            $sheet->insertNewColumnBefore('C', 1);
+            $sheet->insertNewColumnBefore('I', 1);
+            for ($row = $startRow; $row <= $endRow; $row++) {
+                $sheet->mergeCells('B' . $row . ':C' . $row);
+                $sheet->mergeCells('H' . $row . ':I' . $row);
+            }
+        }
+        // Copy column widths
+        foreach (range('A', 'N') as $col) {
+            $newSheet->getColumnDimension($col)->setWidth(
+                $sheet->getColumnDimension($col)->getWidth()
+            );
+        }
+
+        for ($row = $startRow; $row <= $endRow; $row++) {
+            $newSheetCol = 'A';
+            for ($col = 'A'; $col <= 'N'; $col++) {
+                //log::info("handling " . $sheet->getTitle() . " column copying. skipcol is " . $skipCol . " and col is " . $col);
+            
+                $cellValue = $sheet->getCell($col . $row)->getCalculatedValue();
+                $newSheet->setCellValue($newSheetCol . $newSheetRow, $cellValue);
+                $newSheet->getStyle($newSheetCol . $newSheetRow)->applyFromArray(
+                    $sheet->getStyle($col . $row)->exportArray()
+                );
+                $newSheetCol++;
+            }
+            $newSheetRow++;
+        }
+
+        $this->copyMergedCells($sheet, $newSheet, $sheetIndex, $startRow, $endRow, $newSheetRow - ($endRow - $startRow + 1));
+
+        //$this->addSectionHeaders($newSheet, $spec, $sheetIndex, $newSheetRow - ($endRow - $startRow + 1));
+    }
+
+    private function copyMergedCells($sheet, $newSheet, $sheetIndex, $startRow, $endRow, $rowOffset)
+    {
+        foreach ($sheet->getMergeCells() as $mergeCell) {
+            $mergeCellRange = Coordinate::extractAllCellReferencesInRange($mergeCell);
+            $firstCell = $mergeCellRange[0];
+            $lastCell = $mergeCellRange[count($mergeCellRange) - 1];
+            
+            $firstColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($firstCell)[0]);
+            $lastColumn = Coordinate::columnIndexFromString(Coordinate::coordinateFromString($lastCell)[0]);
+            
+            $firstRow = Coordinate::coordinateFromString($firstCell)[1];
+            $lastMergeRow = Coordinate::coordinateFromString($lastCell)[1];
+            
+            if ($firstRow >= $startRow && $lastMergeRow <= $endRow) {
+                $newFirstRow = $firstRow - $startRow + $rowOffset;
+                $newLastRow = $lastMergeRow - $startRow + $rowOffset;
+                
+                $newMergeRange = Coordinate::stringFromColumnIndex($firstColumn) . $newFirstRow . ':' . 
+                                 Coordinate::stringFromColumnIndex($lastColumn) . $newLastRow;
+                $newSheet->mergeCells($newMergeRange);
+            }
+        }
+    }
+
+    private function handleExtraColumns($sheet, $newSheet, $startRow, $endRow)
+    {
+        for ($row = $startRow; $row <= $endRow; $row++) {
+            $newSheet->mergeCells('B' . $row . ':C' . $row);
+            $newSheet->mergeCells('H' . $row . ':I' . $row);
+        }
+    }
+
+    private function updateRunningTotals($sheet, $spec, $sumsSection)
+    {
+        $totalsStart = $spec['index_total_start'];
+        foreach ($spec['total'] as $index => $formula) {
+            $cellReference = $this->getColumnLetter($totalsStart) . ($this->getRowNumber($totalsStart) + $index);
+            $sumsSection[$index] = $sheet->getCell($cellReference)->getCalculatedValue();
+        }
+        return $sumsSection;
+    }
+
+    private function setRunningTotals($newSheet, $spec, $sumsSection, $totalRowOffset)
+    {
+        $totalsStart = $spec['index_total_start'];
+        foreach ($spec['total'] as $index => $formula) {
+            $cellReference = $this->getColumnLetter($totalsStart) . ($this->getRowNumber($totalsStart) + $index + $totalRowOffset);
+            $newSheet->setCellValue($cellReference, $sumsSection[$index]);
+            
+            // Adjust the formula for the new row numbers
+            $adjustedFormula = $this->adjustFormulaRowNumbers($formula, $totalRowOffset);
+            $newSheet->setCellValue($this->getColumnLetter($totalsStart, 1) . ($this->getRowNumber($totalsStart) + $index + $totalRowOffset), $adjustedFormula);
+        }
+    }
+
+    private function adjustFormulaRowNumbers($formula, $offset)
+    {
+        return preg_replace_callback('/([A-Z])(\d+)/', function($matches) use ($offset) {
+            return $matches[1] . ($matches[2] + $offset);
+        }, $formula);
+    }
+
+    private function getColumnLetter($cellReference, $offset = 0)
+    {
+        return Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString(preg_replace('/[0-9]/', '', $cellReference)) + $offset);
+    }
+
+    private function getRowNumber($cellReference)
+    {
+        return (int)preg_replace('/[A-Za-z]/', '', $cellReference);
+    }
+
+    private function saveNewSpreadsheet($newSpreadsheet, $design)
+    {
+        $writer = IOFactory::createWriter($newSpreadsheet, 'Xlsx');
+        $filename = $design->id . "_" . time() . "_configured";
+        $newFilePath = storage_path('app/public/orders/' . $filename . '.xlsx');
+        $writer->save($newFilePath);
+        return $newFilePath;
+    }
+
+    private function addSectionHeaders($newSheet, $spec, $sheetIndex, $rowOffset)
+    {
+        if (!isset($spec['sections'])) {
+            return;
+        }
+
+        foreach ($spec['sections'] as $section) {
+            $sectionStart = $section['start'];
+            if ($sheetIndex > 0) {
+                $sectionStart -= $spec['index_smeta_alt_start'] - 1;
+            }
+            $newRowNumber = $sectionStart + $rowOffset + 1; // Add 1 to correct the row number
+
+            // Merge cells A-F for the section header
+            $newSheet->mergeCells("A{$newRowNumber}:F{$newRowNumber}");
+
+            // Set alignment to left
+            $newSheet->getStyle("A{$newRowNumber}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+            // Set the section title
+            $newSheet->setCellValue("A{$newRowNumber}", $section['title']);
+        }
+    }
 
 private function checkExtraColumn($sheet) {
-    $sheetsWithExtraCol = ["плита", "винты", "лента"];
+    $sheetsWithExtraCol = ["плита", "лента", "СВ-Рост"];
     foreach ($sheetsWithExtraCol as $exception) {
         if (strpos($sheet, $exception) !== false) {
             return true;
         }
     }
     return false;
-    }
-
-    public function updateRunningTotals($sheet, $totalsBoxStart, $sumsSection) {
-        for ($i=0; $i<8; $i++) {
-            $columnForTotals = $totalsBoxStart[0];
-            $rowForTotals = substr($totalsBoxStart, 1);
-            Log::info("Updating totals for sheet " . $sheet->getTitle() . " for cell " . $columnForTotals . ($rowForTotals+$i));
-            if (isset($sumsSection[$i])) {
-                $sumsSection[$i] = $sumsSection[$i] + $sheet->getCell($columnForTotals . ($rowForTotals+$i))->getCalculatedValue();
-            } else {
-                $sumsSection[$i] = $sheet->getCell($columnForTotals . ($rowForTotals+$i))->getCalculatedValue();
-            }
-        }
-        return $sumsSection;
-    }
-
-    public function setRunningTotals($sheet, $totalsBoxStart, $sumsSection) {
-        for ($i=0; $i<8; $i++) {
-            $columnForTotals = $totalsBoxStart[0];
-            $rowForTotals = substr($totalsBoxStart, 1);
-            $sheet->setCellValue($columnForTotals . ($rowForTotals+$i-7), $sumsSection[$i]);
-        }
-        return $sheet;
     }
 
     public function handlePriceIndexing($spreadsheet, $design)
@@ -799,7 +950,7 @@ private function checkExtraColumn($sheet) {
         $endingIndex = 40;
         // Mapping of floor names to numbers/letters
         $floorMapping = [
-            "Первый" => '1', // Первый
+            "Первый" => '1', // ервый
             "Второй" => '2', // Второй
             "Третий" => '3', // Третий
             "Чердак" => 'Ч'  // Чердак

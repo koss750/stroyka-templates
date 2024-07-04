@@ -307,7 +307,6 @@ class TemplateController extends Controller
             $total5cell = $col . ($row+4);
             $total6cell = $col . ($row+5);
             $total7cell = $col . ($row+6);
-            $total8cell = $col . ($row+7);
             $dbSheetSpec['total'][0] = $worksheet->getCell($total1cell)->getValue();
             $total1Calculated = $worksheet->getCell("C3")->getValue();
             $dbSheetSpec['index_total_start'] = substr($total1Calculated, 1);
@@ -317,6 +316,22 @@ class TemplateController extends Controller
             $dbSheetSpec['total'][4] = $worksheet->getCell($total5cell)->getValue();
             $dbSheetSpec['total'][5] = $worksheet->getCell($total6cell)->getValue();
             $dbSheetSpec['total'][6] = $worksheet->getCell($total7cell)->getValue();
+
+        
+            foreach ($dbSheetSpec['sections'] as $key=>$section) {
+                
+                if (strpos($section['title'], 'этажа') !== false) {
+                    if (strpos($section['title'], '2. ') !== false) {
+                        $dbSheetSpec['sections'][$key]['title'] = "floor1";
+                    } else if (strpos($section['title'], '2.1') !== false) {
+                        $dbSheetSpec['sections'][$key]['title'] = "floor2";
+                    } else if (strpos($section['title'], '2.2') !== false) {
+                        $dbSheetSpec['sections'][$key]['title'] = "floor3";
+                    } else dd($section);
+                }
+                
+            }
+
             $invoiceType = InvoiceType::where('sheetname', $worksheet->getTitle())->get();
             foreach ($invoiceType as $type) {
                 $type->sheet_spec = $dbSheetSpec;
