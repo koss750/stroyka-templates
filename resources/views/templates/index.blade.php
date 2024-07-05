@@ -51,14 +51,14 @@
                 'template' => $srs,
                 'category' => 'srs',
                 'title' => 'Свайно-растверковый с плитой перекрытия',
-                'name' => 'Свайно-растверковый с плитой перекрытия'
+                'name' => 'Свайно-раств��рковый с плитой перекрытия'
             ])
 
             <!-- sr Template Box -->
             @include('template_box', [
                 'template' => $sr,
                 'category' => 'sr',
-                'title' => 'Свайно-��стверковый',
+                'title' => 'Свайно-верковый',
                 'name' => 'Свайно-растверковый'
             ])
         </div>
@@ -75,7 +75,7 @@
             </div>
             <div class="modal-body">
                 <form action="/external" method="GET">
-                <div class="form-group">
+                <div class="form-group" id="designGroup">
                     <label for="designInput">Название проекта:</label>
                     <input type="text" class="form-control" id="designInput" required>
                     <input type="hidden" name="design" id="designId">
@@ -87,13 +87,24 @@
                         <input type="checkbox" class="form-check-input" name="labour" id="labourCheckbox" checked>
                         <label class="form-check-label" for="labour">Включить цены за работы</label>
                     </div>
-                    <div class="form-group" id="sheetnameGroup" style="display: none;">
-                        <label for="sheetnameInput">Название листа (не работает, галочку на работах оставляем пока):</label>
-                        <input type="text" class="form-control" id="sheetnameInput" list="sheetnameSuggestions">
-                        <datalist id="sheetnameSuggestions"></datalist>
-                        <input type="hidden" name="sheetname" id="sheetnameHidden" value="all">
+                    <div class="form-group">
+                        <label>Выберите тип генерации:</label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-outline-primary active">
+                                <input type="radio" name="templateType" id="wholeTemplate" value="whole" checked> Целый шаблон
+                        </label>
+                        <label class="btn btn-outline-primary">
+                            <input type="radio" name="templateType" id="singlePage" value="single"> Одну страницу
+                        </label>
                     </div>
-                    <input type="hidden" name="filename" value="{{ $mainTemplate->name }}">
+                </div>
+                <div class="form-group" id="sheetnameGroup" style="display: none;">
+                    <label for="sheetnameInput">Название листа</label>
+                    <input type="text" id="sheetnameInput" class="form-control" list="sheetnameSuggestions">
+                    <datalist id="sheetnameSuggestions"></datalist>
+                    <input type="hidden" name="sheetname" id="sheetnameHidden" value="all">
+                </div>
+                    <input type="hidden" id="filenameInput" name="filename" value="{{ $mainTemplate->name }}.xlsx">
                     <input type="hidden" name="debug" value="1"/>
                     <button type="submit" class="btn btn-primary">Сгенерировать</button>
                 </form>
@@ -133,7 +144,7 @@
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="fLentaModalLabel">Сгенерировать смету (Ленточный фундамент)</h5>
+                <h5 class="modal-title" id="fLentaModalLabel">Сгенерировать смету (Ленточный фундамнт)</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -244,50 +255,114 @@
         designInput.parentNode.insertBefore(messageElement, designInput.nextSibling);
 
         const labourCheckbox = document.getElementById('labourCheckbox');
-        const sheetnameGroup = document.getElementById('sheetnameGroup');
-        const sheetnameInput = document.getElementById('sheetnameInput');
-        const sheetnameHidden = document.getElementById('sheetnameHidden');
-        const sheetnameSuggestions = document.getElementById('sheetnameSuggestions');
-        const sheetnameMessage = document.createElement('div');
-        sheetnameMessage.classList.add('message');
-        sheetnameGroup.appendChild(sheetnameMessage);
+    const wholeTemplateRadio = document.getElementById('wholeTemplate');
+    const singlePageRadio = document.getElementById('singlePage');
+    const sheetnameGroup = document.getElementById('sheetnameGroup');
+    const sheetnameInput = document.getElementById('sheetnameInput');
+    const sheetnameHidden = document.getElementById('sheetnameHidden');
+    const sheetnameSuggestions = document.getElementById('sheetnameSuggestions');
+    const sheetnameMessage = document.createElement('div');
+    sheetnameMessage.classList.add('message');
+    sheetnameGroup.appendChild(sheetnameMessage);
 
-        designInput.addEventListener('input', function() {
-            const designTitle = this.value;
-            if (designTitle) {
-                fetch('/get-project-id?title=' + encodeURIComponent(designTitle))
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            designIdInput.value = data.id;
-                            messageElement.textContent = 'Проект найден';
-                            messageElement.style.color = 'green';
-                        } else {
-                            designIdInput.value = '';
-                            messageElement.textContent = 'Проект не найден';
-                            messageElement.style.color = 'red';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        messageElement.textContent = 'Ошибка при поиске проекта';
-                        messageElement.style.color = 'red';
-                    });
-            } else {
-                designIdInput.value = '';
-                messageElement.textContent = '';
-            }
-        });
+    function toggleSheetnameGroup() {
+        console.log('singlePageRadio.checked', singlePageRadio.checked);
+        if (singlePageRadio.checked) {
+            sheetnameGroup.style.display = 'block';
+        } else {
+            sheetnameGroup.style.display = 'none';
+            sheetnameInput.value = '';
+            sheetnameHidden.value = 'all';
+            sheetnameMessage.textContent = '';
+        }
+    }
+
+    wholeTemplateRadio.addEventListener('click', toggleSheetnameGroup);
+    singlePageRadio.addEventListener('click', toggleSheetnameGroup);
+
+    sheetnameInput.addEventListener('input', function() {
+        const sheetname = this.value;
+        if (sheetname) {
+            fetch('/get-sheetname?name=' + encodeURIComponent(sheetname))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        sheetnameHidden.value = data.name;
+                        sheetnameMessage.textContent = 'Лист найден';
+                        sheetnameMessage.style.color = 'green';
+                    } else {
+                        sheetnameHidden.value = '';
+                        sheetnameMessage.textContent = 'Лист не найден';
+                        sheetnameMessage.style.color = 'red';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    sheetnameMessage.textContent = 'Ошибка при поиске листа';
+                    sheetnameMessage.style.color = 'red';
+                });
+
+            // Fetch suggestions for the sheetname
+            fetch('/get-sheetname-suggestions?query=' + encodeURIComponent(sheetname))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        sheetnameSuggestions.innerHTML = '';
+                        data.suggestions.forEach(suggestion => {
+                            const option = document.createElement('option');
+                            option.value = suggestion;
+                            sheetnameSuggestions.appendChild(option);
+                        });
+                    } else {
+                        console.error('No suggestions found');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching suggestions:', error);
+                });
+        } else {
+            sheetnameHidden.value = 'all';
+            sheetnameMessage.textContent = '';
+            sheetnameSuggestions.innerHTML = '';
+        }
+    });
 
         labourCheckbox.addEventListener('change', function() {
             if (this.checked) {
-                sheetnameGroup.style.display = 'none';
-                sheetnameHidden.value = 'all';
+                var currentValue = filenameInput.value;
+                filenameInput.value = currentValue.replace('clean_', '');
             } else {
-                sheetnameGroup.style.display = 'block';
-                sheetnameHidden.value = '';
+                var currentValue = filenameInput.value;
+                filenameInput.value = 'clean_' + currentValue;
             }
         });
+
+        designInput.addEventListener('input', function() {
+        const designTitle = this.value;
+        if (designTitle) {
+            fetch('/get-project-id?title=' + encodeURIComponent(designTitle))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        designIdInput.value = data.id;
+                        messageElement.textContent = 'Проект найден';
+                        messageElement.style.color = 'green';
+                    } else {
+                        designIdInput.value = '';
+                        messageElement.textContent = 'Проект не найден';
+                        messageElement.style.color = 'red';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageElement.textContent = 'Ошибка при поиске проекта';
+                    messageElement.style.color = 'red';
+                });
+        } else {
+            designIdInput.value = '';
+            messageElement.textContent = '';
+        }
+    });
 
         sheetnameInput.addEventListener('input', function() {
             const sheetname = this.value;
@@ -339,3 +414,5 @@
         });
     });
 </script>
+
+

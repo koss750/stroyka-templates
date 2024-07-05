@@ -181,15 +181,18 @@ class SpreadsheetService
         }
         return false;
     }
-    public function handle($filePath, $design=1, $multiple=false, $labour=true, $debug=1, $config=null) {
+    public function handle($filePath, $design, $multiple=false, $labour=true, $debug=1, $config=null) {
         try {
             $spreadsheet = IOFactory::createReader('Xlsx')->load($filePath);
         } catch (\Exception $e) {
             throw $e;
         }
-
         if ($config) {
-            $newFilePath = $this->processConfiguredSheets($spreadsheet, $design, $config);
+            if ($config instanceof InvoiceType) {
+                $newFilePath = $this->handleSingleSheet($spreadsheet, $design, $config);
+            } else {
+                $newFilePath = $this->processConfiguredSheets($spreadsheet, $design, $config);
+            }
             return $newFilePath;
         }
 
@@ -207,6 +210,33 @@ class SpreadsheetService
         $writer->save($newFilePath);
 
         return $newFilePath;
+    }
+
+    private function handleSingleSheet($spreadsheet, $design, $invoiceType)
+    {
+        // Get all InvoiceType data
+        $sheetName = $invoiceType->sheetname;
+
+        $sheetArray[$invoiceType->oldestParent->label] = [$invoiceType->label, $invoiceType->sheetname, false, $invoiceType->title, $invoiceType->sheet_spec];
+        
+        // Prepare the template spreadsheet
+        $this->prepareSpreadsheet($spreadsheet, $design);
+        $sheet = $spreadsheet->getSheetByName($sheetName);
+        
+        // Create and replicate the Smeta
+        $newSpreadsheet = $this->prepareNewSpreadsheet();
+        $this->processExceptionalSheets($spreadsheet, $sheetArray, $design);
+        if ($invoiceType->oldestParent->label === 'd') {
+            //$this->adjustFloorsInSheet($sheet, $design->floorsNumber, $invoiceType->sheet_spec);
+        }
+        $this->copySingleSheet($sheet, $newSheet);
+        $newFilePath = $this->saveNewSpreadsheet($newSpreadsheet, $design);
+    }
+
+    private function prepareNewSpreadsheet() {
+        $newSpreadsheet = $this->createNewSpreadsheet();
+        $newSpreadsheet->createSheet()->setTitle('Смета');
+        return $newSpreadsheet;
     }
 
     private function getSheetsToCombine($config) {
@@ -498,6 +528,36 @@ class SpreadsheetService
                     }
                 }
             }
+        }
+    }
+
+    private function copySingleSheet($sourceSheet, $targetSheet)
+    {
+        // Copy column widths
+        foreach (range('A', 'N') as $col) {
+            $targetSheet->getColumnDimension($col)->setWidth(
+                $sourceSheet->getColumnDimension($col)->getWidth()
+            );
+        }
+
+        // Get the highest row and column of the source sheet
+        $highestRow = $sourceSheet->getHighestRow();
+        $highestColumn = $sourceSheet->getHighestColumn();
+
+        // Copy cell contents and styles
+        for ($row = 1; $row <= $highestRow; $row++) {
+            for ($col = 'A'; $col <= $highestColumn; $col++) {
+                $cellValue = $sourceSheet->getCell($col . $row)->getCalculatedValue();
+                $targetSheet->setCellValue($col . $row, $cellValue);
+                $targetSheet->getStyle($col . $row)->applyFromArray(
+                $sourceSheet->getStyle($col . $row)->exportArray()
+                );
+            }
+        }
+
+        // Copy merged cells
+        foreach ($sourceSheet->getMergeCells() as $mergeCell) {
+            $targetSheet->mergeCells(str_replace('1', $targetRow - $highestRow, $mergeCell));
         }
     }
 

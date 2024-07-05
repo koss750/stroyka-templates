@@ -71,7 +71,8 @@ class FulfillmentController extends Controller
             $filePath = $this->spreadsheetService->handle($filePath, $design, false);
             return response()->download($filePath);
         } else {
-            $filePath = $this->spreadsheetService->handle($filePath, $design, false, true);
+            $invoiceType = InvoiceType::where('label', $request->sheetname)->first();
+            $filePath = $this->spreadsheetService->handle($filePath, $design, false, true, 1, $invoiceType);
             return response()->download($filePath);
         }
     }

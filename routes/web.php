@@ -62,7 +62,7 @@ Route::get('/get-sheetname', function (Request $request) {
     // Query the database to find the sheetname
     $sheet = DB::table('invoice_structures')->where('sheetname', $name)->first();
     if ($sheet) {
-        return response()->json(['success' => true, 'name' => $sheet->sheetname]);
+        return response()->json(['success' => true, 'name' => $sheet->label]);
     } else {
         return response()->json(['success' => false]);
     }
